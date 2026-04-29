@@ -1,0 +1,1035 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Polygon VWAP + EMA 9/20 Pullback Scanner</title>
+  <style>
+    :root {
+      --bg: #070a0f;
+      --panel: #0e141f;
+      --panel2: #121b29;
+      --border: #223047;
+      --text: #eef4ff;
+      --muted: #8fa0b8;
+      --green: #00d084;
+      --red: #ff4d5e;
+      --yellow: #ffb020;
+      --blue: #55a7ff;
+      --gray: #778399;
+      --shadow: 0 14px 34px rgba(0,0,0,.35);
+      --radius: 18px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at top left, rgba(85,167,255,.12), transparent 32%),
+        radial-gradient(circle at top right, rgba(0,208,132,.08), transparent 28%),
+        var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      min-height: 100vh;
+    }
+
+    .app {
+      width: 100%;
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 18px;
+      padding-bottom: 42px;
+    }
+
+    .top {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 14px;
+      align-items: start;
+      margin-bottom: 16px;
+    }
+
+    h1 {
+      margin: 0 0 7px;
+      font-size: clamp(24px, 4vw, 38px);
+      letter-spacing: -0.04em;
+      line-height: 1;
+    }
+
+    .subtitle {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid var(--border);
+      background: rgba(18,27,41,.78);
+      color: var(--muted);
+      padding: 8px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .status-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--gray);
+      box-shadow: 0 0 0 4px rgba(119,131,153,.12);
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: 1.25fr .95fr .7fr .7fr auto;
+      gap: 10px;
+      background: rgba(14,20,31,.74);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px;
+      box-shadow: var(--shadow);
+      margin-bottom: 14px;
+      backdrop-filter: blur(10px);
+    }
+
+    textarea, select, button, input {
+      border: 1px solid var(--border);
+      background: #0a1018;
+      color: var(--text);
+      border-radius: 13px;
+      padding: 11px 12px;
+      font-size: 14px;
+      outline: none;
+      width: 100%;
+    }
+
+    input::placeholder, textarea::placeholder { color: #60708a; }
+
+    textarea {
+      resize: vertical;
+      min-height: 48px;
+      line-height: 1.35;
+    }
+
+    button {
+      cursor: pointer;
+      background: linear-gradient(135deg, #1f7cff, #00b976);
+      border: 0;
+      font-weight: 800;
+      letter-spacing: -.01em;
+      min-width: 138px;
+    }
+
+    button.secondary {
+      background: #10192a;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      min-width: 90px;
+    }
+
+    button:disabled {
+      cursor: not-allowed;
+      filter: grayscale(1);
+      opacity: .6;
+    }
+
+    .key-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      margin-bottom: 14px;
+      background: rgba(14,20,31,.74);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px;
+    }
+
+    .mini-row {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .mini {
+      background: rgba(14,20,31,.72);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 12px;
+    }
+
+    .mini .label {
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 6px;
+    }
+
+    .mini .value {
+      font-size: 18px;
+      font-weight: 800;
+    }
+
+    .note {
+      border: 1px solid rgba(255,176,32,.26);
+      background: rgba(255,176,32,.08);
+      color: #ffdc93;
+      padding: 12px 14px;
+      border-radius: 16px;
+      font-size: 13px;
+      line-height: 1.4;
+      margin-bottom: 14px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .card {
+      background: linear-gradient(180deg, rgba(18,27,41,.96), rgba(10,16,24,.96));
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .card.trade { border-color: rgba(0,208,132,.62); }
+    .card.put.trade { border-color: rgba(255,77,94,.62); }
+    .card.watch { border-color: rgba(255,176,32,.62); }
+    .card.no { opacity: .86; }
+
+    .card-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: start;
+      margin-bottom: 10px;
+    }
+
+    .ticker {
+      font-size: 24px;
+      font-weight: 900;
+      letter-spacing: -.03em;
+    }
+
+    .price {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 2px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 7px 9px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 900;
+      white-space: nowrap;
+      background: rgba(119,131,153,.16);
+      color: var(--muted);
+      border: 1px solid rgba(119,131,153,.25);
+    }
+
+    .badge.call {
+      color: #a5ffd8;
+      background: rgba(0,208,132,.13);
+      border-color: rgba(0,208,132,.30);
+    }
+
+    .badge.put {
+      color: #ffc2c9;
+      background: rgba(255,77,94,.13);
+      border-color: rgba(255,77,94,.30);
+    }
+
+    .badge.watch {
+      color: #ffdd99;
+      background: rgba(255,176,32,.13);
+      border-color: rgba(255,176,32,.30);
+    }
+
+    .score-wrap { margin: 10px 0 12px; }
+
+    .score-line {
+      display: flex;
+      justify-content: space-between;
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 7px;
+    }
+
+    .bar {
+      height: 9px;
+      border-radius: 999px;
+      background: #08101a;
+      overflow: hidden;
+      border: 1px solid #1e2a3c;
+    }
+
+    .fill {
+      height: 100%;
+      width: 0;
+      background: linear-gradient(90deg, var(--red), var(--yellow), var(--green));
+      border-radius: inherit;
+    }
+
+    .kv {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin: 10px 0;
+    }
+
+    .box {
+      border: 1px solid rgba(34,48,71,.75);
+      background: rgba(7,10,15,.44);
+      border-radius: 13px;
+      padding: 9px;
+      min-height: 54px;
+    }
+
+    .box span {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      margin-bottom: 4px;
+    }
+
+    .box b {
+      display: block;
+      font-size: 13px;
+      overflow-wrap: anywhere;
+    }
+
+    .reason {
+      border-top: 1px solid rgba(34,48,71,.75);
+      padding-top: 10px;
+      margin-top: 10px;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+
+    .reason strong { color: var(--text); }
+
+    .footer {
+      margin-top: 18px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    @media (max-width: 1000px) {
+      .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .controls { grid-template-columns: 1fr 1fr; }
+      button { grid-column: span 2; }
+      .mini-row { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    @media (max-width: 620px) {
+      .app { padding: 12px; }
+      .top { grid-template-columns: 1fr; }
+      .controls, .key-row { grid-template-columns: 1fr; }
+      button { grid-column: span 1; }
+      .grid { grid-template-columns: 1fr; }
+      .mini-row { grid-template-columns: repeat(2, 1fr); }
+      .ticker { font-size: 22px; }
+      textarea { min-height: 80px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="top">
+      <div>
+        <h1>Polygon VWAP + EMA 9/20 Scanner</h1>
+        <p class="subtitle">
+          Primary data: Polygon aggregate bars with rate-limit protection. Signal: 15m. Timing: 5m. Trend filter: 1H. Yahoo remains fallback only.
+        </p>
+      </div>
+      <div class="pill"><span class="status-dot" id="statusDot"></span><span id="statusText">Ready</span></div>
+    </section>
+
+    <section class="key-row">
+      <input id="polygonKey" type="password" placeholder="Paste Polygon API key here — saved only in this browser" autocomplete="off" />
+      <button class="secondary" id="saveKeyBtn">Save Key</button>
+    </section>
+
+    <section class="controls">
+      <textarea id="watchlist" spellcheck="false">NVDA, TSLA, AMD, AMZN, META</textarea>
+      <select id="mode">
+        <option value="strict" selected>Strict A+ mode</option>
+        <option value="normal">Normal mode</option>
+      </select>
+      <select id="provider">
+        <option value="polygon" selected>Polygon primary</option>
+        <option value="polygon_yahoo">Polygon + Yahoo fallback</option>
+        <option value="yahoo">Yahoo only</option>
+      </select>
+      <select id="rangeDays">
+        <option value="10">10 days bars</option>
+        <option value="20">20 days bars</option>
+        <option value="30" selected>30 days bars</option>
+        <option value="45">45 days bars</option>
+      </select>
+      <select id="pace">
+        <option value="13000" selected>Free safe pace</option>
+        <option value="5000">Medium pace</option>
+        <option value="1200">Paid fast pace</option>
+      </select>
+      <button id="scanBtn">Scan Now</button>
+    </section>
+
+    <section class="mini-row">
+      <div class="mini"><div class="label">TRADE</div><div class="value" id="tradeCount">0</div></div>
+      <div class="mini"><div class="label">WATCH</div><div class="value" id="watchCount">0</div></div>
+      <div class="mini"><div class="label">NO TRADE</div><div class="value" id="noCount">0</div></div>
+      <div class="mini"><div class="label">Data Source</div><div class="value" id="sourceUsed">—</div></div>
+      <div class="mini"><div class="label">Last Updated</div><div class="value" id="updatedAt">—</div></div>
+    </section>
+
+    <div class="note">
+      Polygon gives cleaner timeframe bars than free Yahoo, but the free/basic limit is tight. This version uses a longer 30-day bar range and timeframe-specific minimum bars so the 1H trend filter does not fail because of weekends/non-trading gaps.
+    </div>
+
+    <section class="grid" id="results"></section>
+
+    <div class="footer">
+      Setup logic: 15m price/VWAP alignment, EMA 9/20 alignment, RSI, relative volume, pullback/reclaim or rejection, 5m confirmation, 1H trend filter, extension from VWAP, and estimated risk/reward.
+      Best use: after first 15–30 minutes of the US session. Do not trade if price is chopping around VWAP.
+    </div>
+  </main>
+
+  <script>
+    const INTERVALS = {
+      timing: { provider: "polygon", multiplier: 5, timespan: "minute", yahoo: "5m" },
+      signal: { provider: "polygon", multiplier: 15, timespan: "minute", yahoo: "15m" },
+      trend:  { provider: "polygon", multiplier: 1, timespan: "hour", yahoo: "60m" }
+    };
+
+    const CONFIG = {
+      maxFromVwapPctStrict: 1.75,
+      maxFromVwapPctNormal: 2.50,
+      minVolumeRatioStrict: 1.20,
+      minVolumeRatioNormal: 1.00,
+      minRRStrict: 2.0,
+      minRRNormal: 1.5,
+      rsiCallMin: 50,
+      rsiPutMax: 50,
+      idealRsiCallLow: 52,
+      idealRsiCallHigh: 68,
+      idealRsiPutLow: 32,
+      idealRsiPutHigh: 48
+    };
+
+    const el = {
+      polygonKey: document.getElementById("polygonKey"),
+      saveKeyBtn: document.getElementById("saveKeyBtn"),
+      watchlist: document.getElementById("watchlist"),
+      mode: document.getElementById("mode"),
+      provider: document.getElementById("provider"),
+      rangeDays: document.getElementById("rangeDays"),
+      pace: document.getElementById("pace"),
+      scanBtn: document.getElementById("scanBtn"),
+      results: document.getElementById("results"),
+      statusText: document.getElementById("statusText"),
+      statusDot: document.getElementById("statusDot"),
+      tradeCount: document.getElementById("tradeCount"),
+      watchCount: document.getElementById("watchCount"),
+      noCount: document.getElementById("noCount"),
+      sourceUsed: document.getElementById("sourceUsed"),
+      updatedAt: document.getElementById("updatedAt")
+    };
+
+    const savedKey = localStorage.getItem("polygon_api_key") || "";
+    if (savedKey) el.polygonKey.value = savedKey;
+
+    const requestCache = new Map();
+    let lastPolygonRequestAt = 0;
+
+    function sleep(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    async function respectPolygonPace() {
+      const delayMs = Number(el.pace.value || 13000);
+      const now = Date.now();
+      const wait = Math.max(0, delayMs - (now - lastPolygonRequestAt));
+      if (wait > 0) {
+        setStatus(`Rate-limit protection: waiting ${Math.ceil(wait / 1000)}s...`, "yellow");
+        await sleep(wait);
+      }
+      lastPolygonRequestAt = Date.now();
+    }
+
+    el.saveKeyBtn.addEventListener("click", () => {
+      const key = el.polygonKey.value.trim();
+      if (!key) {
+        localStorage.removeItem("polygon_api_key");
+        setStatus("Polygon key cleared", "yellow");
+      } else {
+        localStorage.setItem("polygon_api_key", key);
+        setStatus("Polygon key saved locally", "green");
+      }
+    });
+
+    function setStatus(text, color = "gray") {
+      el.statusText.textContent = text;
+      const c = color === "green" ? "var(--green)" : color === "red" ? "var(--red)" : color === "yellow" ? "var(--yellow)" : "var(--gray)";
+      el.statusDot.style.background = c;
+      el.statusDot.style.boxShadow = `0 0 0 4px color-mix(in srgb, ${c} 22%, transparent)`;
+    }
+
+    function parseWatchlist() {
+      return el.watchlist.value
+        .split(/[,\s]+/)
+        .map(x => x.trim().toUpperCase())
+        .filter(Boolean)
+        .filter((x, i, arr) => arr.indexOf(x) === i);
+    }
+
+    function ymd(date) {
+      return date.toISOString().slice(0, 10);
+    }
+
+    function dateRange(days) {
+      const to = new Date();
+      const from = new Date(to.getTime() - Number(days) * 24 * 60 * 60 * 1000);
+      return { from: ymd(from), to: ymd(to) };
+    }
+
+    function isRegularSessionET(date) {
+      const parts = new Intl.DateTimeFormat("en-US", {
+        timeZone: "America/New_York",
+        hour12: false,
+        hour: "2-digit",
+        minute: "2-digit",
+        weekday: "short"
+      }).formatToParts(date).reduce((acc, p) => (acc[p.type] = p.value, acc), {});
+
+      const weekday = parts.weekday;
+      if (weekday === "Sat" || weekday === "Sun") return false;
+
+      const minutes = Number(parts.hour) * 60 + Number(parts.minute);
+      return minutes >= (9 * 60 + 30) && minutes <= (16 * 60);
+    }
+
+    function polygonUrl(symbol, cfg) {
+      const days = Number(el.rangeDays.value || 7);
+      const { from, to } = dateRange(days);
+      const key = (el.polygonKey.value || localStorage.getItem("polygon_api_key") || "").trim();
+      if (!key) throw new Error("Missing Polygon API key");
+
+      const params = new URLSearchParams({
+        adjusted: "true",
+        sort: "asc",
+        limit: "50000",
+        apiKey: key
+      });
+
+      return `https://api.polygon.io/v2/aggs/ticker/${encodeURIComponent(symbol)}/range/${cfg.multiplier}/${cfg.timespan}/${from}/${to}?${params.toString()}`;
+    }
+
+    function yahooUrl(symbol, interval) {
+      const range = "5d";
+      return `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=${interval}&range=${range}&includePrePost=false`;
+    }
+
+    function proxied(url) {
+      return `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+    }
+
+    async function fetchJson(url) {
+      const res = await fetch(url, { cache: "no-store" });
+      if (!res.ok) {
+        let text = "";
+        try { text = await res.text(); } catch (_) {}
+        throw new Error(`HTTP ${res.status}${text ? " — " + text.slice(0, 120) : ""}`);
+      }
+      return await res.json();
+    }
+
+    async function fetchPolygonChart(symbol, cfg) {
+      const url = polygonUrl(symbol, cfg);
+      const cacheKey = `${symbol}:${cfg.multiplier}:${cfg.timespan}:${el.rangeDays.value}`;
+      const cached = requestCache.get(cacheKey);
+      if (cached && Date.now() - cached.time < 60_000) {
+        return { rows: cached.rows, source: "Polygon cached" };
+      }
+
+      await respectPolygonPace();
+      const json = await fetchJson(url);
+      if (json.status === "ERROR") throw new Error(json.error || "Polygon error");
+      const raw = json.results || [];
+      if (!raw.length) throw new Error("Polygon returned no bars for this interval");
+
+      const rows = raw.map(r => ({
+        time: new Date(r.t),
+        open: r.o,
+        high: r.h,
+        low: r.l,
+        close: r.c,
+        volume: r.v
+      }))
+      .filter(r =>
+        isRegularSessionET(r.time) &&
+        Number.isFinite(r.open) &&
+        Number.isFinite(r.high) &&
+        Number.isFinite(r.low) &&
+        Number.isFinite(r.close)
+      );
+
+      const minBars = cfg.timespan === "hour" ? 18 : cfg.multiplier === 15 ? 30 : 40;
+      if (rows.length < minBars) {
+        throw new Error(`Not enough regular-session Polygon candles: got ${rows.length}, need ${minBars}. Increase bar range or use Yahoo fallback.`);
+      }
+      requestCache.set(cacheKey, { rows, time: Date.now() });
+      return { rows, source: "Polygon" };
+    }
+
+    async function fetchYahooChart(symbol, interval) {
+      const directUrl = yahooUrl(symbol, interval);
+      const urls = [directUrl, proxied(directUrl)];
+      let lastError = null;
+
+      for (const url of urls) {
+        try {
+          const json = await fetchJson(url);
+          const result = json?.chart?.result?.[0];
+          const quote = result?.indicators?.quote?.[0];
+          const timestamps = result?.timestamp || [];
+          if (!quote || !timestamps.length) throw new Error("Missing Yahoo chart data");
+
+          const rows = timestamps.map((t, i) => ({
+            time: new Date(t * 1000),
+            open: quote.open?.[i],
+            high: quote.high?.[i],
+            low: quote.low?.[i],
+            close: quote.close?.[i],
+            volume: quote.volume?.[i]
+          })).filter(r =>
+            isRegularSessionET(r.time) &&
+            Number.isFinite(r.open) &&
+            Number.isFinite(r.high) &&
+            Number.isFinite(r.low) &&
+            Number.isFinite(r.close)
+          );
+
+          const minBars = interval === "60m" ? 18 : interval === "15m" ? 30 : 40;
+          if (rows.length < minBars) throw new Error(`Not enough Yahoo candles: got ${rows.length}, need ${minBars}`);
+          return { rows, source: "Yahoo" };
+        } catch (err) {
+          lastError = err;
+        }
+      }
+
+      throw lastError || new Error("Yahoo data unavailable");
+    }
+
+    async function fetchChart(symbol, slot) {
+      const cfg = INTERVALS[slot];
+      const provider = el.provider.value;
+
+      if (provider === "polygon") {
+        return await fetchPolygonChart(symbol, cfg);
+      }
+
+      if (provider === "yahoo") {
+        return await fetchYahooChart(symbol, cfg.yahoo);
+      }
+
+      // Polygon + Yahoo fallback
+      try {
+        return await fetchPolygonChart(symbol, cfg);
+      } catch (polygonError) {
+        try {
+          const y = await fetchYahooChart(symbol, cfg.yahoo);
+          y.source = "Yahoo fallback";
+          return y;
+        } catch (yahooError) {
+          throw new Error(`Polygon failed: ${polygonError.message}. Yahoo fallback failed: ${yahooError.message}`);
+        }
+      }
+    }
+
+    function ema(values, period) {
+      const k = 2 / (period + 1);
+      const out = Array(values.length).fill(null);
+      if (values.length < period) return out;
+      let sum = 0;
+      for (let i = 0; i < period; i++) sum += values[i];
+      out[period - 1] = sum / period;
+      for (let i = period; i < values.length; i++) {
+        out[i] = values[i] * k + out[i - 1] * (1 - k);
+      }
+      return out;
+    }
+
+    function sma(values, period) {
+      const out = Array(values.length).fill(null);
+      let sum = 0;
+      for (let i = 0; i < values.length; i++) {
+        sum += values[i] || 0;
+        if (i >= period) sum -= values[i - period] || 0;
+        if (i >= period - 1) out[i] = sum / period;
+      }
+      return out;
+    }
+
+    function rsi(values, period = 14) {
+      const out = Array(values.length).fill(null);
+      if (values.length <= period) return out;
+      let gains = 0, losses = 0;
+      for (let i = 1; i <= period; i++) {
+        const diff = values[i] - values[i - 1];
+        if (diff >= 0) gains += diff;
+        else losses -= diff;
+      }
+      let avgGain = gains / period;
+      let avgLoss = losses / period;
+      out[period] = avgLoss === 0 ? 100 : 100 - (100 / (1 + avgGain / avgLoss));
+      for (let i = period + 1; i < values.length; i++) {
+        const diff = values[i] - values[i - 1];
+        const gain = Math.max(diff, 0);
+        const loss = Math.max(-diff, 0);
+        avgGain = (avgGain * (period - 1) + gain) / period;
+        avgLoss = (avgLoss * (period - 1) + loss) / period;
+        out[i] = avgLoss === 0 ? 100 : 100 - (100 / (1 + avgGain / avgLoss));
+      }
+      return out;
+    }
+
+    function atr(rows, period = 14) {
+      const trs = rows.map((r, i) => {
+        if (i === 0) return r.high - r.low;
+        const prevClose = rows[i - 1].close;
+        return Math.max(
+          r.high - r.low,
+          Math.abs(r.high - prevClose),
+          Math.abs(r.low - prevClose)
+        );
+      });
+      return sma(trs, period);
+    }
+
+    function vwap(rows) {
+      const out = [];
+      let cumPV = 0, cumVol = 0;
+      let currentDay = "";
+      for (const r of rows) {
+        const day = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(r.time);
+        if (day !== currentDay) {
+          currentDay = day;
+          cumPV = 0;
+          cumVol = 0;
+        }
+        const typical = (r.high + r.low + r.close) / 3;
+        const vol = Number.isFinite(r.volume) ? Math.max(r.volume, 0) : 0;
+        cumPV += typical * vol;
+        cumVol += vol;
+        out.push(cumVol > 0 ? cumPV / cumVol : typical);
+      }
+      return out;
+    }
+
+    function last(arr) { return arr[arr.length - 1]; }
+    function fmt(n, d = 2) { return Number.isFinite(n) ? n.toFixed(d) : "—"; }
+    function pct(a, b) { return b ? ((a - b) / b) * 100 : NaN; }
+    function recentHigh(rows, lookback = 20) { return Math.max(...rows.slice(-lookback).map(r => r.high).filter(Number.isFinite)); }
+    function recentLow(rows, lookback = 20) { return Math.min(...rows.slice(-lookback).map(r => r.low).filter(Number.isFinite)); }
+    function candleDirection(r) {
+      if (r.close > r.open) return "green";
+      if (r.close < r.open) return "red";
+      return "flat";
+    }
+
+    function analyzeSymbol(symbol, data, mode, sources) {
+      const sRows = data.signal, tRows = data.timing, hRows = data.trend;
+
+      const closes15 = sRows.map(r => r.close);
+      const volumes15 = sRows.map(r => r.volume || 0);
+      const ema9_15 = ema(closes15, 9);
+      const ema20_15 = ema(closes15, 20);
+      const rsi15 = rsi(closes15, 14);
+      const atr15 = atr(sRows, 14);
+      const vwap15 = vwap(sRows);
+      const avgVol15 = sma(volumes15, 20);
+
+      const closes5 = tRows.map(r => r.close);
+      const ema9_5 = ema(closes5, 9);
+      const ema20_5 = ema(closes5, 20);
+      const vwap5 = vwap(tRows);
+      const rsi5 = rsi(closes5, 14);
+
+      const closes60 = hRows.map(r => r.close);
+      const ema9_60 = ema(closes60, 9);
+      const ema20_60 = ema(closes60, 20);
+      const rsi60 = rsi(closes60, 14);
+
+      const r = last(sRows);
+      const price = r.close;
+      const vwapNow = last(vwap15);
+      const ema9Now = last(ema9_15);
+      const ema20Now = last(ema20_15);
+      const rsiNow = last(rsi15);
+      const atrNow = last(atr15);
+      const volNow = r.volume || 0;
+      const avgVolNow = last(avgVol15);
+      const volRatio = avgVolNow ? volNow / avgVolNow : NaN;
+      const high20 = recentHigh(sRows.slice(0, -1), 20);
+      const low20 = recentLow(sRows.slice(0, -1), 20);
+      const extension = Math.abs(pct(price, vwapNow));
+
+      const maxExtension = mode === "strict" ? CONFIG.maxFromVwapPctStrict : CONFIG.maxFromVwapPctNormal;
+      const minVol = mode === "strict" ? CONFIG.minVolumeRatioStrict : CONFIG.minVolumeRatioNormal;
+      const minRR = mode === "strict" ? CONFIG.minRRStrict : CONFIG.minRRNormal;
+
+      const oneHourBull = last(closes60) > last(ema20_60) && last(ema9_60) > last(ema20_60) && last(rsi60) > 50;
+      const oneHourBear = last(closes60) < last(ema20_60) && last(ema9_60) < last(ema20_60) && last(rsi60) < 50;
+
+      const fiveMinBull = last(closes5) > last(vwap5) && last(ema9_5) > last(ema20_5) && last(rsi5) > 50;
+      const fiveMinBear = last(closes5) < last(vwap5) && last(ema9_5) < last(ema20_5) && last(rsi5) < 50;
+
+      const pullbackCall =
+        price > vwapNow &&
+        ema9Now > ema20Now &&
+        rsiNow > CONFIG.rsiCallMin &&
+        r.low <= Math.max(vwapNow, ema20Now) * 1.004 &&
+        r.close > ema9Now &&
+        candleDirection(r) === "green";
+
+      const pullbackPut =
+        price < vwapNow &&
+        ema9Now < ema20Now &&
+        rsiNow < CONFIG.rsiPutMax &&
+        r.high >= Math.min(vwapNow, ema20Now) * 0.996 &&
+        r.close < ema9Now &&
+        candleDirection(r) === "red";
+
+      const callStop = Math.min(r.low, vwapNow, ema20Now) - (atrNow * 0.15);
+      const callTarget = Math.max(high20, price + atrNow * 1.5);
+      const callRisk = price - callStop;
+      const callReward = callTarget - price;
+      const callRR = callRisk > 0 ? callReward / callRisk : NaN;
+
+      const putStop = Math.max(r.high, vwapNow, ema20Now) + (atrNow * 0.15);
+      const putTarget = Math.min(low20, price - atrNow * 1.5);
+      const putRisk = putStop - price;
+      const putReward = price - putTarget;
+      const putRR = putRisk > 0 ? putReward / putRisk : NaN;
+
+      let callScore = 0, putScore = 0;
+      const callReasons = [], putReasons = [], reject = [];
+
+      function add(cond, points, target, reason) {
+        if (!cond) return;
+        if (target === "call") { callScore += points; callReasons.push(reason); }
+        if (target === "put") { putScore += points; putReasons.push(reason); }
+      }
+
+      add(price > vwapNow, 15, "call", "price above VWAP");
+      add(price < vwapNow, 15, "put", "price below VWAP");
+      add(ema9Now > ema20Now, 15, "call", "EMA 9 above EMA 20");
+      add(ema9Now < ema20Now, 15, "put", "EMA 9 below EMA 20");
+      add(pullbackCall, 20, "call", "15m pullback held VWAP/EMA20 and reclaimed EMA9");
+      add(pullbackPut, 20, "put", "15m pullback rejected VWAP/EMA20 and lost EMA9");
+      add(fiveMinBull, 10, "call", "5m timing confirms bullish momentum");
+      add(fiveMinBear, 10, "put", "5m timing confirms bearish momentum");
+      add(oneHourBull, 10, "call", "1H trend confirms bullish bias");
+      add(oneHourBear, 10, "put", "1H trend confirms bearish bias");
+      add(volRatio >= minVol, 10, "call", "volume is acceptable");
+      add(volRatio >= minVol, 10, "put", "volume is acceptable");
+      add(rsiNow >= CONFIG.idealRsiCallLow && rsiNow <= CONFIG.idealRsiCallHigh, 10, "call", "RSI in clean bullish zone");
+      add(rsiNow >= CONFIG.idealRsiPutLow && rsiNow <= CONFIG.idealRsiPutHigh, 10, "put", "RSI in clean bearish zone");
+      add(extension <= maxExtension, 10, "call", "not extended from VWAP");
+      add(extension <= maxExtension, 10, "put", "not extended from VWAP");
+      add(callRR >= minRR, 10, "call", "risk/reward acceptable");
+      add(putRR >= minRR, 10, "put", "risk/reward acceptable");
+
+      if (extension > maxExtension) reject.push("price extended from VWAP");
+      if (volRatio < minVol) reject.push("weak relative volume");
+      if (Math.max(callRR || 0, putRR || 0) < minRR) reject.push("risk/reward below threshold");
+      if (Math.abs(pct(ema9Now, ema20Now)) < 0.05) reject.push("EMA 9/20 too flat or too close");
+      if (rsiNow > 72 || rsiNow < 28) reject.push("RSI is extended");
+
+      const direction = callScore >= putScore ? "CALL" : "PUT";
+      const score = Math.round(Math.max(callScore, putScore));
+      const rr = direction === "CALL" ? callRR : putRR;
+      const stop = direction === "CALL" ? callStop : putStop;
+      const target = direction === "CALL" ? callTarget : putTarget;
+      const reasons = direction === "CALL" ? callReasons : putReasons;
+
+      let decision = "NO TRADE", grade = "No Trade";
+      if (score >= 85 && rr >= minRR && reject.length <= 1) { decision = "TRADE"; grade = "A+"; }
+      else if (score >= 70 && rr >= minRR) { decision = "WATCH"; grade = "Valid Watch"; }
+      else if (score >= 55) { decision = "WATCH"; grade = "Weak Watch"; }
+
+      return {
+        symbol, price, direction, score, decision, grade,
+        setup: direction === "CALL" ? "VWAP + EMA Bullish Pullback" : "VWAP + EMA Bearish Pullback",
+        vwap: vwapNow, ema9: ema9Now, ema20: ema20Now, rsi: rsiNow, volRatio, atr: atrNow,
+        entry: price, stop, target, rr, support: low20, resistance: high20, extension,
+        reasons, reject, sources: [...new Set(sources)].join(" / "),
+        bars: `${sRows.length}x15m · ${tRows.length}x5m · ${hRows.length}x1H`
+      };
+    }
+
+    function renderCard(x) {
+      const cls = x.decision === "TRADE" ? "trade" : x.decision === "WATCH" ? "watch" : "no";
+      const dirCls = x.direction === "CALL" ? "call" : "put";
+      const badgeCls = x.decision === "WATCH" ? "watch" : dirCls;
+      const invalidation = x.direction === "CALL" ? `Below ${fmt(x.stop)}` : `Above ${fmt(x.stop)}`;
+      const fail = x.reject.length ? x.reject.join(", ") : "No major rejection rule triggered.";
+      const reason = x.reasons.length ? x.reasons.slice(0, 4).join(", ") : "No clean confirmation.";
+
+      return `
+        <article class="card ${cls} ${x.direction === "PUT" ? "put" : ""}">
+          <div class="card-head">
+            <div>
+              <div class="ticker">${x.symbol}</div>
+              <div class="price">Price: $${fmt(x.price)} · ${x.setup}</div>
+            </div>
+            <div class="badge ${badgeCls}">${x.decision} · ${x.direction}</div>
+          </div>
+
+          <div class="score-wrap">
+            <div class="score-line"><span>${x.grade}</span><strong>${x.score}/100</strong></div>
+            <div class="bar"><div class="fill" style="width:${Math.min(x.score, 100)}%"></div></div>
+          </div>
+
+          <div class="kv">
+            <div class="box"><span>Entry</span><b>$${fmt(x.entry)}</b></div>
+            <div class="box"><span>Stop</span><b>$${fmt(x.stop)}</b></div>
+            <div class="box"><span>Target</span><b>$${fmt(x.target)}</b></div>
+            <div class="box"><span>R/R</span><b>${fmt(x.rr, 2)} : 1</b></div>
+            <div class="box"><span>VWAP</span><b>$${fmt(x.vwap)}</b></div>
+            <div class="box"><span>EMA 9 / 20</span><b>${fmt(x.ema9)} / ${fmt(x.ema20)}</b></div>
+            <div class="box"><span>RSI / RVOL</span><b>${fmt(x.rsi, 1)} / ${fmt(x.volRatio, 2)}x</b></div>
+            <div class="box"><span>Extension</span><b>${fmt(x.extension, 2)}%</b></div>
+            <div class="box"><span>Support</span><b>$${fmt(x.support)}</b></div>
+            <div class="box"><span>Resistance</span><b>$${fmt(x.resistance)}</b></div>
+            <div class="box"><span>Source</span><b>${x.sources}</b></div>
+            <div class="box"><span>Bars</span><b>${x.bars}</b></div>
+          </div>
+
+          <div class="reason">
+            <strong>Valid because:</strong> ${reason}<br>
+            <strong>Could fail because:</strong> ${fail}<br>
+            <strong>Invalidation:</strong> ${invalidation}
+          </div>
+        </article>
+      `;
+    }
+
+    function renderError(symbol, error) {
+      return `
+        <article class="card no">
+          <div class="card-head">
+            <div>
+              <div class="ticker">${symbol}</div>
+              <div class="price">Data unavailable</div>
+            </div>
+            <div class="badge">NO DATA</div>
+          </div>
+          <div class="reason">
+            <strong>Reason:</strong> ${String(error.message || error).replace(/[<>]/g, "")}<br>
+            <strong>Fix:</strong> Check Polygon API key, plan access for intraday bars, range days, or enable Yahoo fallback.
+          </div>
+        </article>
+      `;
+    }
+
+    async function scanOne(symbol) {
+      // Sequential requests are intentional. Polygon free/basic limits can throw HTTP 429 if 5m, 15m, and 1H are requested in parallel.
+      setStatus(`${symbol}: loading 15m signal bars...`, "yellow");
+      const signal = await fetchChart(symbol, "signal");
+
+      setStatus(`${symbol}: loading 5m timing bars...`, "yellow");
+      const timing = await fetchChart(symbol, "timing");
+
+      setStatus(`${symbol}: loading 1H trend bars...`, "yellow");
+      const trend = await fetchChart(symbol, "trend");
+
+      return analyzeSymbol(
+        symbol,
+        { signal: signal.rows, timing: timing.rows, trend: trend.rows },
+        el.mode.value,
+        [signal.source, timing.source, trend.source]
+      );
+    }
+
+    async function runScan() {
+      const symbols = parseWatchlist();
+      if (!symbols.length) return;
+
+      el.scanBtn.disabled = true;
+      el.results.innerHTML = "";
+      setStatus("Scanning...", "yellow");
+
+      let trade = 0, watch = 0, no = 0;
+      const cards = [];
+      const sourceSet = new Set();
+
+      for (const symbol of symbols) {
+        setStatus(`Scanning ${symbol}...`, "yellow");
+        try {
+          const result = await scanOne(symbol);
+          result.sources.split(" / ").forEach(s => sourceSet.add(s));
+          if (result.decision === "TRADE") trade++;
+          else if (result.decision === "WATCH") watch++;
+          else no++;
+          cards.push(result);
+        } catch (error) {
+          no++;
+          cards.push({ error, symbol });
+        }
+
+        el.tradeCount.textContent = trade;
+        el.watchCount.textContent = watch;
+        el.noCount.textContent = no;
+        el.sourceUsed.textContent = [...sourceSet].join("/") || "—";
+
+        const sorted = [...cards].sort((a, b) => {
+          if (a.error && !b.error) return 1;
+          if (!a.error && b.error) return -1;
+          return (b.score || 0) - (a.score || 0);
+        });
+
+        el.results.innerHTML = sorted.map(x => x.error ? renderError(x.symbol, x.error) : renderCard(x)).join("");
+      }
+
+      el.updatedAt.textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      setStatus("Scan complete", trade ? "green" : watch ? "yellow" : "gray");
+      el.scanBtn.disabled = false;
+    }
+
+    el.scanBtn.addEventListener("click", runScan);
+
+    el.results.innerHTML = `
+      <article class="card">
+        <div class="card-head">
+          <div>
+            <div class="ticker">READY</div>
+            <div class="price">Paste Polygon key, save it, then scan 3–5 tickers in Free safe pace.</div>
+          </div>
+          <div class="badge">POLYGON</div>
+        </div>
+        <div class="reason">
+          <strong>Best practice:</strong> scan after the first 15–30 minutes of the US session.
+          Use 30 days bars by default. Use Free safe pace if you get HTTP 429. Do not scan a 15+ ticker list on a free/basic limit unless you are willing to wait.
+        </div>
+      </article>
+    `;
+  </script>
+</body>
+</html>
